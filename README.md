@@ -1,5 +1,5 @@
 # vectorizedMinHash
-A small toolkit for very efficiently comparing the similarity of large sets of documents or other data structures that can be represented as sets. Core features:
+A small toolkit for very efficiently comparing the similarity of large numbers of documents or other data structures that can be represented as sets. Core features:
 - Very fast construction of MinHash "fingerprints" of sets. The algorithm is inspired by the MinHash implementation in [datasketch](https://github.com/ekzhu/datasketch), but the core MinHash algorithm is vectorized in numpy and includes CUDA support via [cupy](https://cupy.chainer.org/).
 - Jaccard similarity estimation
 - Cardinality estimation (with bias correction for much better accuracy)
@@ -26,7 +26,7 @@ hasher = VectorizedMinHash(n_perm=256,mirror=True)
 testString = 'This is a test string'
 
 # Construct a fingerprint from n-gram features
-# (converts bytes directly to n-gram ids by changing the stride of the dtype)
+# (fastNGramHashes converts bytes directly to n-gram ids by changing the stride of the dtype)
 ngramHashes = fastNGramHashes(testString.encode('ascii'),n=4)
 fingerprint = hasher.fingerprint(ngramHashes),cuda=True)
 
@@ -47,7 +47,7 @@ fingerprint = hasher.fingerprint(ids,cuda=True)
 ```
 The constructor's most important parameter is `n_perm`, which sets the size of the fingerprints. Larger fingerprints are more accurate, but require more processing time and and memory to store. `mirror` doubles the length of the fingerprint for a given `n_perm` by using the max operation as in addition to min. In my experiments this saves processing time and improves accuracy, so it is the default setting.
 
-A fingerprint is a simple `np.uint32` array. It doesn't remember what hasher made it, so be careful to only compare fingerprints made with exactly the same settings.
+A fingerprint is a simple `np.uint32` array. It doesn't remember what hasher made it, so __be careful to only compare fingerprints made with exactly the same settings__.
 
 ### Merging fingerprints with union
 Fingerprints can be merged with the `union` function. This operation is equivalent to taking the union (or concatenating all the hash values) of the input sets before fingerprinting. Behind the scenes, it just stacks the fingerprints into an 2-d array and takes the min.
