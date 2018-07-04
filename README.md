@@ -1,7 +1,7 @@
 # vectorizedMinHash
 A small toolkit for very efficiently comparing the similarity of large numbers of documents or other data structures that can be represented as sets. Core features:
 - Very fast construction of MinHash "fingerprints" of sets. The algorithm is inspired by the MinHash implementation in [datasketch](https://github.com/ekzhu/datasketch), but the core MinHash algorithm is vectorized in numpy and includes CUDA support via [cupy](https://cupy.chainer.org/).
-- Jaccard similarity estimation
+- Jaccard similarity index estimation
 - Cardinality estimation (with bias correction for much better accuracy)
 - Union operations between fingerprints
 
@@ -74,4 +74,4 @@ The cardinality of a fingerprint (that is, the number of distinct hashes used to
 n = hasher.cardinality(fingerprint)
 ```
 #### A Note on bias correction
-Accurately estimating the cardinality of a set from its fingerprint is a little tricky. The method used in Datasketch MinHash has a huge downward bias, and more accurate methods usually involve completely different hashing algorithms (which can't simultaneously compute Jaccard similarity). The implementation in this module uses a simple bias-corrected maximum likelihood estimator to significantly increase the accuracy. The only complication is that the bias correction must be calculated empirically. The module has the required code at the end of the `__init__.py` file. Pre-computed bias correction coefficients are stored in `bias_coef.npy`, and should load automatically.
+Accurately estimating the cardinality of a set from its fingerprint is a little tricky. The method used in Datasketch MinHash has a huge downward bias, and more accurate methods usually involve completely different hashing algorithms (which can't simultaneously compute Jaccard similarity). The implementation in this module uses a simple bias-corrected maximum likelihood estimator to significantly increase the accuracy. The only complication is that the bias correction coefficients must be empirically estimated. The module has the required code at the end of the `__init__.py` file. Pre-computed bias correction coefficients are stored in `bias_coef.npy`, and should load automatically from the project root directory.
