@@ -8,7 +8,7 @@ import time
 from unidecode import unidecode
 
 
-def accuracyTest(baseBytes,n_fractions=501):
+def jaccardAccuracyTest(baseBytes,n_fractions=501):
 
     randBytes = bytes(random.getrandbits(8) for _ in range(len(baseBytes)))
 
@@ -30,7 +30,7 @@ def accuracyTest(baseBytes,n_fractions=501):
             for n_perm in [128,256,512,1024]:
                 mh = vectorizedMinHash(n_perm,mirror=mirror)
 
-                h0 = mh.fingerprint(fastNGramHashes(baseBytes),cuda=cuda)
+                h0 = mh.fingerprint(fastNGramHashes(baseBytes,batch_size=1000),cuda=cuda)
                 for f,mixtureBytes in zip(randFractions,mixtures):
 
                     start_time = time.time()
@@ -125,7 +125,46 @@ sb.lmplot(x='true_jaccard',y='jaccard',data=resultsDF[resultsDF['cuda']],hue='n_
 plt.plot([0,1],[0,1],lw=0.5,c='k')
 
 sb.lmplot(x='n_perm',y='error',data=resultsDF[resultsDF['cuda']].groupby(['mirror','n_perm']).mean().reset_index(),hue='mirror',fit_reg=False,size=4,aspect=1)
+plt.plot([0,1],[0,1],lw=0.5,c='k')
 plt.gca().set_ylim((0,None))
 
 sb.lmplot(x='n_perm',y='time',data=resultsDF.groupby(['cuda','n_perm']).mean().reset_index(),hue='cuda',fit_reg=False,size=4,aspect=1)
+plt.plot([0,1],[0,1],lw=0.5,c='k')
 plt.gca().set_ylim((0,None))
+
+
+
+
+
+import matplotlib.pyplot as plt
+import seaborn as sb
+
+resultsDF = pd.DataFrame()
+for n_perm in (64,128,512,1024):
+    vectorizedMinHash = VectorizedMinHash(n_perm,mirror=True)
+
+    cardinalities = np.geomspace(10,1e6,num=10).astype(int)
+    estimates = np.zeros(len(cardinalities))
+
+    for i,c in enumerate(cardinalities):
+        h = np.array(range(c),dtype=np.uint32)
+        f = vectorizedMinHash.fingerprint(h,cuda=True)
+        estimates[i] = vectorizedMinHash.cardinality(f)
+
+        # Datasketch formula:
+        # estimates[i] = np.float(n_perm) / np.sum(f / np.float(vectorizedMinHash._max_hash)) - 1.0
+
+
+    df = pd.DataFrame(np.vstack([cardinalities.astype(float),estimates]).T,columns=['cardinality','estimate'])
+    df['n_perm'] = n_perm
+    resultsDF = resultsDF.append(df)
+
+for c in ['cardinality','estimate']:
+    resultsDF['log_'+c] = np.log10(resultsDF[c])
+
+sb.lmplot(x='log_cardinality',y='log_estimate',hue='n_perm',data=resultsDF,fit_reg=False)
+plt.plot([0,resultsDF['log_cardinality'].max()],[0,resultsDF['log_cardinality'].max()],lw=0.5,c='k')
+
+
+sb.lmplot(x='cardinality',y='estimate',hue='n_perm',data=resultsDF,fit_reg=False)
+plt.plot([0,resultsDF['cardinality'].max()],[0,resultsDF['cardinality'].max()],lw=0.5,c='k')

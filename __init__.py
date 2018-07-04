@@ -1,22 +1,35 @@
 import numpy as np
-import cupy as cp
 from zlib import adler32
-import regex as re
+import re
+
+try:
+    import cupy as cp
+else:
+    print('Warning: No cupy installation found. cuda=True will raise an error.')
+
+try:
+    biasFile = r'C:\Users\Brad\Google Drive\Research\Python3\vectorizedMinHash\bias_coef.npy'
+    bias_coef = np.load(biasFile)
+except:
+    print('Warning: No default bias correction coefficients found')
+    bias_coef = None
+
+
 
 class VectorizedMinHash():
     '''
     A specialized version of minhash that uses vectorized universal hashing
-    to create fingerprints, with cuda support via cupy.
+    to create fingerprints of sets, with cuda support via cupy.
 
     Hashing implementation based on datasketch MinHash:
     https://ekzhu.github.io/datasketch/_modules/datasketch/minhash.html#MinHash
 
     'Mirror' doubles the length of the fingerprint for a given n_perm by taking
     the max of each perm column as well as the min. Saves processing time and
-    improves accuracy.
+    improves accuracy, while still allowing merging with a min operation.
     '''
 
-    def __init__(self,n_perm=64,mirror=True,seed=1):
+    def __init__(self,n_perm=64,mirror=True,seed=1,card_bias_scaler=None,card_bias_coef=bias_coef):
         self.n_perm = n_perm
         self.mirror = mirror
         self.seed = seed
@@ -33,7 +46,13 @@ class VectorizedMinHash():
                                        self.generator.randint(0, self._mersenne_prime, dtype=np.uint64))
                                       for _ in range(self.n_perm)], dtype=np.uint64).T
 
-
+        #Compute bias scaler for cardinality estimate (a function of n_perm)
+        if card_bias_scaler is not None:
+            self.card_bias_scaler = bias_scaler
+        elif card_bias_coef is not None:
+            self.card_bias_scaler = np.dot(np.array([1,n_perm,np.log(n_perm)]),card_bias_coef)
+        else:
+            self.card_bias_scaler = None
 
     def batchFingerprint(self,h,cuda=True):
         '''
@@ -57,7 +76,9 @@ class VectorizedMinHash():
 
             f = cp.asnumpy(H.min(axis=0))
             if self.mirror:
-                f = np.hstack([f,cp.asnumpy(H.max(axis=0))])
+                f_mirrored = cp.asnumpy(H.max(axis=0))
+                f_mirrored = self._max_hash - f_mirrored
+                f = np.hstack([f,f_mirrored])
 
             #Clear gpu cache
             cp.get_default_memory_pool().free_all_blocks()
@@ -66,34 +87,55 @@ class VectorizedMinHash():
             H = np.tile(h,self.n_perm)
             H = np.bitwise_and((a*H + b) % self._mersenne_prime, np.uint64(self._max_hash))
             f = H.min(axis=0)
+
             if self.mirror:
-                f = np.hstack([f,H.max(axis=0)])
+                f_mirrored = H.max(axis=0)
+                f_mirrored = self._max_hash - f_mirrored
+                f = np.hstack([f,f_mirrored])
 
-        return f
+        return f.astype(np.uint32)
 
-
-    def mergeFingerprints(self,fingerprints):
-        '''
-        Merge two fingerprints to create a new fingerprint. Equivalent output to
-        concatenating hash value sequences before fingerprinting.
-        '''
-        H = np.vstack(fingerprints)
-        if self.mirror:
-            return np.hstack([H[:,:self.n_perm].min(axis=0),H[:,self.n_perm:].max(axis=0)])
-        else:
-            return H.min(axis=0)
 
 
     def fingerprint(self,h,batch_size=10000,cuda=True):
         if not len(h):
             raise Exception('Cannot fingerprint zero-length hash array')
         '''
-        Computes a fingerprint in batches. Useful only if the number of hashes
+        Computes a fingerprint in batches. Useful if the number of hashes
         is very very high or memory is constrained.
         '''
         fingerprints = [self.batchFingerprint(h[i:i+batch_size],cuda=cuda) for i in range(0,len(h),batch_size)]
-        return self.mergeFingerprints(fingerprints)
+        return union(fingerprints)
 
+
+    def cardinality(self,fingerprints,bias_coef=bias_coef):
+        '''
+        Estimate cardinality of set represented by a fingerprint using
+        a bias-corrected maximum-likelyhood estimator.
+        '''
+        M = self._hash_range
+        x = np.log(M - fingerprints) - np.log(M)
+
+        if x.ndim > 1:
+            c =  -1/(np.mean(x,axis=1))
+        else:
+            c = -1/(np.mean(x))
+
+        if self.card_bias_scaler is not None:
+            #Subtract estimated bias
+            c -= c*self.card_bias_scaler
+
+        return c
+
+
+def union(self,fingerprints):
+    '''
+    Merge two fingerprints to create a new fingerprint. Mathematically equivalent
+    to set union. Functionally equivalent output to concatenating hash value
+    sequences before fingerprinting.
+    '''
+    H = np.vstack(fingerprints)
+    return H.min(axis=0)
 
 
 def jaccard(f0,f1):
@@ -137,14 +179,46 @@ def tokenHashes(b,tokenRE=rb'\S+'):
     h = np.array([adler32(t) for t in re.findall(tokenRE,b)],dtype=np.uint32)
     return h
 
-#
-# testBytes = b'''MinHash
-# From Wikipedia, the free encyclopedia
-# In computer science and data mining, MinHash (or the min-wise independent permutations locality sensitive hashing scheme) is a technique for quickly estimating how similar two sets are. The scheme was invented by Andrei Broder (1997),[1] and initially used in the AltaVista search engine to detect duplicate web pages and eliminate them from search results.[2] It has also been applied in large-scale clustering problems, such as clustering documents by the similarity of their sets of words.[1]
-# '''
-#
-# hasher = VectorizedMinHash()
-# hasher.fingerprint(fastNGramHashes(testBytes))
-#
-#
-# hasher.fingerprint(tokenHashes(testBytes))
+
+
+
+
+if __name__ == '__main__':
+    #Compute bias correction coeffients
+
+    import os
+    import pandas as pd
+    import statsmodels.api as sm
+
+    n_samples = 1000
+    min_card = 10
+    max_card = int(1e6)
+    min_perm = 10
+    max_perm = 1000
+
+    biasDF = pd.DataFrame(index=range(n_samples))
+    biasDF['cardinality'] = np.random.uniform(min_card,max_card,size=n_samples).astype(int)
+    biasDF['n_perm'] = np.random.uniform(min_perm,max_perm,size=n_samples).astype(int)
+
+    estimates = []
+    for i,c,n_perm in biasDF.itertuples():
+        vectorizedMinHash = VectorizedMinHash(n_perm)
+        h = np.array(range(c),dtype=np.uint32)
+        f = vectorizedMinHash.fingerprint(h,cuda=True)
+
+        estimates.append(vectorizedMinHash.cardinality(f))
+
+    biasDF['estimate'] = estimates
+
+    biasDF['bias'] = biasDF['estimate'] - biasDF['cardinality']
+    biasDF['log_n_perm'] = np.log(biasDF['n_perm'])
+    # biasDF['interaction'] = biasDF['estimate']*biasDF['n_perm']
+    biasDF['constant'] = 1
+    X = biasDF[['estimate','n_perm','log_n_perm']].multiply(biasDF['estimate'],axis=0)
+    ols = sm.OLS(biasDF['bias'],X)
+
+    print(ols.fit().summary())
+
+    bias_coef = ols.fit().params
+
+    np.save(biasFile,bias_coef.values)
