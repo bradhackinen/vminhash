@@ -28,15 +28,15 @@ testString = 'This is a test string'
 # 1) Construct a fingerprint from n-gram features
 # (fastNGramHashes converts bytes directly to n-gram ids by changing the stride of the dtype)
 ngramHashes = fastNGramHashes(testString.encode('ascii'),n=4)
-fingerprint = hasher.fingerprint(ngramHashes),cuda=True)
+fingerprint = hasher.fingerprint(ngramHashes,cuda=True)
 
 # 2) Construct a fingerprint from tokens (split on whitespace by default)
 tokenHashes = tokenHashes(testString.encode('ascii'))
-fingerprint = hasher.fingerprint(ngramHashes),cuda=True)
+fingerprint = hasher.fingerprint(ngramHashes,cuda=True)
 
 # 3) Construct a fingerprint from tokens (split on non-alphanumeric chars)
 tokenHashes = tokenHashes(testString.encode('ascii'),tokenRE=rb'\w+')
-fingerprint = hasher.fingerprint(tokenHashes),cuda=True)
+fingerprint = hasher.fingerprint(tokenHashes,cuda=True)
 ```
 You can also compute a fingerprint from a more generic array of integer ids (must be representable as a `np.uint32` array)
 ```python
@@ -58,7 +58,7 @@ new_fingerprint = union([fingerprint0,fingerprint1,fingerprint2])
 Fingerprints constructed via `union` are indistinguishable from other fingerprints and it is perfectly valid to use them in jaccard or cardinality estimates.
 
 ### Jaccard similarity index
-The Jaccard similarity index between two sets can be estimated by the fraction of equal values in the correponding fingerprints. The module contains two helper functions: `jaccard` and `jaccardMatrix`:
+The Jaccard similarity index between two sets can be estimated by the fraction of equal values in the corresponding fingerprints. The module contains two helper functions: `jaccard` and `jaccardMatrix`:
 ```python
 from vectorizedMinHash import jaccard, jaccardMatrix
 
@@ -69,9 +69,9 @@ jac = jaccard(fingerprint0,fingerprint1)
 jac_matrix = jaccardMatrix([fingerprint0,fingerprint1,fingerprint2])
 ```
 ### cardinality estimates
-The cardinality of a fingerprint (that is, the number of distict hashes used to generate it) can be estimated with the `cardinality` method:
+The cardinality of a fingerprint (that is, the number of distinct hashes used to generate it) can be estimated with the `cardinality` method:
 ```python
 n = hasher.cardinality(fingerprint)
 ```
 #### A Note on bias correction
-Accurately estimating the cardinality of a set from its fingerprint is a little tricky. The method used in Datasketch MinHash has a huge downward bias, and more accurate methods usually involve completely different hashing algorithms (which can't simultaneously compute jaccard similarity). The implementation in this module uses a simple bias-corrected maximum likelyhood estimator to significantly increase the accuracy. The only complication is that the bias correction must be calculated empirically. The module has the required code at the end of the `__init__.py` file. Pre-computed bias correction coefficients are stored in __bias_coef.npy__, and should load automatically.
+Accurately estimating the cardinality of a set from its fingerprint is a little tricky. The method used in Datasketch MinHash has a huge downward bias, and more accurate methods usually involve completely different hashing algorithms (which can't simultaneously compute Jaccard similarity). The implementation in this module uses a simple bias-corrected maximum likelihood estimator to significantly increase the accuracy. The only complication is that the bias correction must be calculated empirically. The module has the required code at the end of the `__init__.py` file. Pre-computed bias correction coefficients are stored in `bias_coef.npy`, and should load automatically.
