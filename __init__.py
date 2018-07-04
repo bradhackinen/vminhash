@@ -1,19 +1,18 @@
 import numpy as np
 from zlib import adler32
 import re
+from vectorizedMinHash.definitions import ROOT_DIR
 
 try:
     import cupy as cp
-else:
+except:
     print('Warning: No cupy installation found. cuda=True will raise an error.')
 
 try:
-    biasFile = r'C:\Users\Brad\Google Drive\Research\Python3\vectorizedMinHash\bias_coef.npy'
-    bias_coef = np.load(biasFile)
+    bias_coef = np.load(os.path.join(ROOT_DIR,'bias_coef.npy'))
 except:
-    print('Warning: No default bias correction coefficients found')
+    print('Warning: No bias correction coefficients found for cardinality estimation. Accuracy will be reduced.')
     bias_coef = None
-
 
 
 class VectorizedMinHash():
@@ -59,7 +58,7 @@ class VectorizedMinHash():
         Takes a sequence of hash values and creates a minHash fingerprint
         of length n_perm or 2*n_perm if mirror=True.
         '''
-        h = np.array(h)[:,np.newaxis]
+        h = np.array(h,dtype=np.uint32)[:,np.newaxis]
         a,b= self.permutations
 
         if cuda:
@@ -211,9 +210,10 @@ if __name__ == '__main__':
     biasDF['estimate'] = estimates
 
     biasDF['bias'] = biasDF['estimate'] - biasDF['cardinality']
+
     biasDF['log_n_perm'] = np.log(biasDF['n_perm'])
-    # biasDF['interaction'] = biasDF['estimate']*biasDF['n_perm']
     biasDF['constant'] = 1
+
     X = biasDF[['estimate','n_perm','log_n_perm']].multiply(biasDF['estimate'],axis=0)
     ols = sm.OLS(biasDF['bias'],X)
 
@@ -221,4 +221,4 @@ if __name__ == '__main__':
 
     bias_coef = ols.fit().params
 
-    np.save(biasFile,bias_coef.values)
+    np.save(os.path.join(ROOT_DIR,'bias_coef.npy'),bias_coef.values)

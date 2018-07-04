@@ -25,24 +25,23 @@ hasher = VectorizedMinHash(n_perm=256,mirror=True)
 
 testString = 'This is a test string'
 
-# Construct a fingerprint from n-gram features
+# 1) Construct a fingerprint from n-gram features
 # (fastNGramHashes converts bytes directly to n-gram ids by changing the stride of the dtype)
 ngramHashes = fastNGramHashes(testString.encode('ascii'),n=4)
 fingerprint = hasher.fingerprint(ngramHashes),cuda=True)
 
-# Construct a fingerprint from tokens (split on whitespace by default)
+# 2) Construct a fingerprint from tokens (split on whitespace by default)
 tokenHashes = tokenHashes(testString.encode('ascii'))
 fingerprint = hasher.fingerprint(ngramHashes),cuda=True)
 
-# Construct a fingerprint from tokens (split on non-alphanumeric chars)
+# 3) Construct a fingerprint from tokens (split on non-alphanumeric chars)
 tokenHashes = tokenHashes(testString.encode('ascii'),tokenRE=rb'\w+')
 fingerprint = hasher.fingerprint(ngramHashes),cuda=True)
-
-
-# Construct a fingerprint from array np.uint32 array of element ids
-import numpy as np
-ids = np.array(range(10),dtype=np.uint32)
-
+```
+You can also compute a fingerprint from a more generic array of integer ids (must be representable as a `np.uint32` array)
+```python
+# Construct a fingerprint from element ids
+ids = range(10)
 fingerprint = hasher.fingerprint(ids,cuda=True)
 ```
 The constructor's most important parameter is `n_perm`, which sets the size of the fingerprints. Larger fingerprints are more accurate, but require more processing time and and memory to store. `mirror` doubles the length of the fingerprint for a given `n_perm` by using the max operation as in addition to min. In my experiments this saves processing time and improves accuracy, so it is the default setting.
@@ -75,4 +74,4 @@ The cardinality of a fingerprint (that is, the number of distict hashes used to 
 n = hasher.cardinality(fingerprint)
 ```
 #### A Note on bias correction
-Accurately estimating the cardinality of a set from its fingerprint is a little tricky. The method used in Datasketch MinHash has a huge downward bias, and more accurate methods usually involve completely different hashing algorithms (which can't simultaneously compute jaccard similarity). The implementation in the vectorizedMinHash module uses a simple bias-corrected maximum likelyhood estimator to significantly increase the accuracy. The only complication is that the bias correction must be calculated empirically. The module has the required code at the end of the `__init__` file. Pre-computed bias correction coefficients are stored in __bias_coef.npy__, but you will need to set the path to this file. _If you care about the accuracy of your cardinality estimates I strongly recommend setting this path or computing your own coefficients._
+Accurately estimating the cardinality of a set from its fingerprint is a little tricky. The method used in Datasketch MinHash has a huge downward bias, and more accurate methods usually involve completely different hashing algorithms (which can't simultaneously compute jaccard similarity). The implementation in this module uses a simple bias-corrected maximum likelyhood estimator to significantly increase the accuracy. The only complication is that the bias correction must be calculated empirically. The module has the required code at the end of the `__init__` file. Pre-computed bias correction coefficients are stored in __bias_coef.npy__, and should load automatically.
