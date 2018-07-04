@@ -44,7 +44,7 @@ You can also compute a fingerprint from a more generic array of integer ids (mus
 ids = range(10)
 fingerprint = hasher.fingerprint(ids,cuda=True)
 ```
-The constructor's most important parameter is `n_perm`, which sets the size of the fingerprints. Larger fingerprints are more accurate, but require more processing time and and memory to store. `mirror` doubles the length of the fingerprint for a given `n_perm` by using the max operation as in addition to min. In my experiments this saves processing time and improves accuracy, so it is the default setting.
+The constructor's most important parameter is `n_perm`, which sets the size of the fingerprints. Larger fingerprints are more accurate, but require more processing time and memory to store. `mirror` doubles the length of the fingerprint for a given `n_perm` by using the max operation as in addition to min. In my experiments this saves processing time and improves accuracy, so it is the default setting.
 
 A fingerprint is a simple `np.uint32` array. It doesn't remember what hasher made it, so __be careful to only compare fingerprints made with exactly the same settings__.
 
@@ -74,4 +74,4 @@ The cardinality of a fingerprint (that is, the number of distict hashes used to 
 n = hasher.cardinality(fingerprint)
 ```
 #### A Note on bias correction
-Accurately estimating the cardinality of a set from its fingerprint is a little tricky. The method used in Datasketch MinHash has a huge downward bias, and more accurate methods usually involve completely different hashing algorithms (which can't simultaneously compute jaccard similarity). The implementation in this module uses a simple bias-corrected maximum likelyhood estimator to significantly increase the accuracy. The only complication is that the bias correction must be calculated empirically. The module has the required code at the end of the `__init__` file. Pre-computed bias correction coefficients are stored in __bias_coef.npy__, and should load automatically.
+Accurately estimating the cardinality of a set from its fingerprint is a little tricky. The method used in Datasketch MinHash has a huge downward bias, and more accurate methods usually involve completely different hashing algorithms (which can't simultaneously compute jaccard similarity). The implementation in this module uses a simple bias-corrected maximum likelyhood estimator to significantly increase the accuracy. The only complication is that the bias correction must be calculated empirically. The module has the required code at the end of the `__init__.py` file. Pre-computed bias correction coefficients are stored in __bias_coef.npy__, and should load automatically.

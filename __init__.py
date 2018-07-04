@@ -183,8 +183,8 @@ def tokenHashes(b,tokenRE=rb'\S+'):
 
 
 if __name__ == '__main__':
-    #Compute bias correction coeffients
 
+    #Compute bias correction coeffients
     import os
     import pandas as pd
     import statsmodels.api as sm
