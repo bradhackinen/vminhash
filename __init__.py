@@ -1,3 +1,4 @@
+import os
 import numpy as np
 from zlib import adler32
 import re
@@ -96,7 +97,7 @@ class VectorizedMinHash():
 
 
 
-    def fingerprint(self,h,batch_size=10000,cuda=True):
+    def fingerprint(self,h,batch_size=1000,cuda=True):
         if not len(h):
             raise Exception('Cannot fingerprint zero-length hash array')
         '''
@@ -127,7 +128,7 @@ class VectorizedMinHash():
         return c
 
 
-def union(self,fingerprints):
+def union(fingerprints):
     '''
     Merge two fingerprints to create a new fingerprint. Mathematically equivalent
     to set union. Functionally equivalent output to concatenating hash value
