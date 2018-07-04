@@ -36,7 +36,7 @@ fingerprint = hasher.fingerprint(ngramHashes),cuda=True)
 
 # 3) Construct a fingerprint from tokens (split on non-alphanumeric chars)
 tokenHashes = tokenHashes(testString.encode('ascii'),tokenRE=rb'\w+')
-fingerprint = hasher.fingerprint(ngramHashes),cuda=True)
+fingerprint = hasher.fingerprint(tokenHashes),cuda=True)
 ```
 You can also compute a fingerprint from a more generic array of integer ids (must be representable as a `np.uint32` array)
 ```python
