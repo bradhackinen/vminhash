@@ -28,13 +28,13 @@ def jaccardAccuracyTest(baseBytes,n_fractions=501):
     for cuda in False,True:
         for mirror in False,True:
             for n_perm in [128,256,512,1024]:
-                mh = vectorizedMinHash(n_perm,mirror=mirror)
+                hasher = VectorizedMinHash(n_perm,mirror=mirror)
 
-                h0 = mh.fingerprint(fastNGramHashes(baseBytes,batch_size=1000),cuda=cuda)
+                h0 = hasher.fingerprint(fastNGramHashes(baseBytes),cuda=cuda)
                 for f,mixtureBytes in zip(randFractions,mixtures):
 
                     start_time = time.time()
-                    h1 = mh.fingerprint(fastNGramHashes(mixtureBytes),cuda=cuda)
+                    h1 = hasher.fingerprint(fastNGramHashes(mixtureBytes),cuda=cuda)
                     end_time = time.time()
 
                     jac = jaccard(h0,h1)
@@ -116,55 +116,54 @@ A large scale evaluation has been conducted by Google in 2006 [14] to compare th
 '''
 
 
-resultsDF = accuracyTest(unidecode(sampleText).encode('ascii'))
+jacResultsDF = jaccardAccuracyTest(unidecode(sampleText).encode('ascii'))
 
 
-resultsDF.groupby('cuda')['error'].mean()
+jacResultsDF.groupby('cuda')['error'].mean()
 
-sb.lmplot(x='true_jaccard',y='jaccard',data=resultsDF[resultsDF['cuda']],hue='n_perm',col='mirror',fit_reg=False,size=4,aspect=1)
+sb.lmplot(x='true_jaccard',y='jaccard',data=jacResultsDF[jacResultsDF['cuda']],hue='n_perm',col='mirror',fit_reg=False,size=4,aspect=1)
 plt.plot([0,1],[0,1],lw=0.5,c='k')
 
-sb.lmplot(x='n_perm',y='error',data=resultsDF[resultsDF['cuda']].groupby(['mirror','n_perm']).mean().reset_index(),hue='mirror',fit_reg=False,size=4,aspect=1)
-plt.plot([0,1],[0,1],lw=0.5,c='k')
+sb.lmplot(x='n_perm',y='error',data=jacResultsDF[jacResultsDF['cuda']].groupby(['mirror','n_perm']).mean().reset_index(),hue='mirror',fit_reg=False,size=4,aspect=1)
 plt.gca().set_ylim((0,None))
 
-sb.lmplot(x='n_perm',y='time',data=resultsDF.groupby(['cuda','n_perm']).mean().reset_index(),hue='cuda',fit_reg=False,size=4,aspect=1)
-plt.plot([0,1],[0,1],lw=0.5,c='k')
+sb.lmplot(x='n_perm',y='time',data=jacResultsDF.groupby(['cuda','n_perm']).mean().reset_index(),hue='cuda',fit_reg=False,size=4,aspect=1)
 plt.gca().set_ylim((0,None))
 
 
 
 
+def cardinalityAccuracyTest(n_perm_values=(64,128,512,1024),min_card=10,max_card=1e6,n_card_samples=10):
 
-import matplotlib.pyplot as plt
-import seaborn as sb
+    resultsDF = pd.DataFrame()
+    for n_perm in n_perm_values:
+        vectorizedMinHash = VectorizedMinHash(n_perm,mirror=True)
 
-resultsDF = pd.DataFrame()
-for n_perm in (64,128,512,1024):
-    vectorizedMinHash = VectorizedMinHash(n_perm,mirror=True)
+        cardinalities = np.geomspace(min_card,max_card,num=n_card_samples).astype(int)
+        estimates = np.zeros(len(cardinalities))
 
-    cardinalities = np.geomspace(10,1e6,num=10).astype(int)
-    estimates = np.zeros(len(cardinalities))
+        for i,c in enumerate(cardinalities):
+            h = np.array(range(c),dtype=np.uint32)
+            f = vectorizedMinHash.fingerprint(h,cuda=True)
+            estimates[i] = vectorizedMinHash.cardinality(f)
 
-    for i,c in enumerate(cardinalities):
-        h = np.array(range(c),dtype=np.uint32)
-        f = vectorizedMinHash.fingerprint(h,cuda=True)
-        estimates[i] = vectorizedMinHash.cardinality(f)
+            # Datasketch formula:
+            # estimates[i] = np.float(n_perm) / np.sum(f / np.float(vectorizedMinHash._max_hash)) - 1.0
 
-        # Datasketch formula:
-        # estimates[i] = np.float(n_perm) / np.sum(f / np.float(vectorizedMinHash._max_hash)) - 1.0
+        df = pd.DataFrame(np.vstack([cardinalities.astype(float),estimates]).T,columns=['cardinality','estimate'])
+        df['n_perm'] = n_perm
+        resultsDF = resultsDF.append(df)
 
+    for c in ['cardinality','estimate']:
+        resultsDF['log_'+c] = np.log10(resultsDF[c])
 
-    df = pd.DataFrame(np.vstack([cardinalities.astype(float),estimates]).T,columns=['cardinality','estimate'])
-    df['n_perm'] = n_perm
-    resultsDF = resultsDF.append(df)
+    return resultsDF
 
-for c in ['cardinality','estimate']:
-    resultsDF['log_'+c] = np.log10(resultsDF[c])
+cardResultsDF = cardinalityAccuracyTest()
 
-sb.lmplot(x='log_cardinality',y='log_estimate',hue='n_perm',data=resultsDF,fit_reg=False)
-plt.plot([0,resultsDF['log_cardinality'].max()],[0,resultsDF['log_cardinality'].max()],lw=0.5,c='k')
+sb.lmplot(x='log_cardinality',y='log_estimate',hue='n_perm',data=cardResultsDF,fit_reg=False)
+plt.plot([0,cardResultsDF['log_cardinality'].max()],[0,cardResultsDF['log_cardinality'].max()],lw=0.5,c='k')
 
 
-sb.lmplot(x='cardinality',y='estimate',hue='n_perm',data=resultsDF,fit_reg=False)
-plt.plot([0,resultsDF['cardinality'].max()],[0,resultsDF['cardinality'].max()],lw=0.5,c='k')
+sb.lmplot(x='cardinality',y='estimate',hue='n_perm',data=cardResultsDF,fit_reg=False)
+plt.plot([0,cardResultsDF['cardinality'].max()],[0,cardResultsDF['cardinality'].max()],lw=0.5,c='k')
