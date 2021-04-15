@@ -1,4 +1,4 @@
-# vectorizedMinHash
+# vminhash
 A small toolkit for very efficiently comparing the similarity of large numbers of documents or other data structures that can be represented as sets. Core features:
 - Very fast construction of MinHash "fingerprints" of sets. The algorithm is inspired by the MinHash implementation in [datasketch](https://github.com/ekzhu/datasketch), but the core MinHash algorithm is vectorized in numpy and includes CUDA support via [cupy](https://cupy.chainer.org/).
 - Jaccard similarity index estimation
