@@ -1,8 +1,6 @@
 import os
 import numpy as np
-from zlib import adler32, crc32
-import regex as re
-from itertools import combinations
+from zlib import crc32
 from tqdm import tqdm
 
 
@@ -160,10 +158,10 @@ def jaccard_matrix(fingerprints):
     for i in range(n):
         x_i = (F[i:,:] == F[:n-i,:]).mean(axis=1)
 
-        #Fill upper triangle
+        # Fill upper triangle
         np.fill_diagonal(X[i:,:n-i],x_i)
 
-        #Fill lower triangle
+        # Fill lower triangle
         np.fill_diagonal(X[:n-i,i:],x_i)
     return X
 
@@ -241,7 +239,7 @@ def jaccard_cluster(fingerprints,threshold=0.9,cuda='auto'):
                         ids_to_cluster = xp.isin(cluster_ids,matched_clusters)
 
                     except cp.cuda.memory.OutOfMemoryError:
-                        # In older versions of cupy, isin() can be very memory intensive
+                        # In older versions of cupy, cupy.isin() can be very memory intensive
                         # (see: https://github.com/cupy/cupy/pull/4018)
                         # Check for cuda out of memory errors, and try moving this step
                         # to the CPU instead.
@@ -287,9 +285,9 @@ def byte_hashes(b,n=4):
 
     n must be equal to 1,2, or 4.
     """
-    if not n in [1,2,4]:
+    if n not in [1,2,4]:
         raise ValueError('n must be in [1,2,4]')
-    h = np.hstack([cut_bytes(b,n,offset) for offset in range(n)])
+    h = np.hstack([_cut_bytes(b,n,offset) for offset in range(n)])
     h = np.unique(h)
     return h
 
@@ -297,11 +295,12 @@ def byte_hashes(b,n=4):
 def token_hashes(tokens,n=1):
     """
     Converts a sequence of string tokens into ngrams and then hashes each ngram
-    using crc32.
+    using crc32 (previously used adler32, but this turns out to be a poor
+    hash function for short strings)
     """
     if n == 1:
         ngrams = set(tokens)
-    elif n>1:
+    elif n > 1:
         ngrams = {'_'.join(tokens[i:i+n]) for i in range(len(tokens) - n + 1)}
     else:
         raise ValueError('n must be greater than or equal to 1')
