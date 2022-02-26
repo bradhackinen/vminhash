@@ -219,19 +219,20 @@ def jaccard_cluster(fingerprints,threshold=0.9,cuda='auto'):
 
     with tqdm(total=n,delay=1,desc='Computing Jaccard clusters') as pbar:
         for i in range(n):
-            # Compare each fingerprint i to all fingerprints j >= i and find matches
+            # Compare each fingerprint i to all fingerprints j such that j >= i and find matches
             c_i = cluster_ids[i]
 
             # Represent j's as a vector of ids
-            j = ids[i:][cluster_ids[i:] != c_i]
+            js = ids[i:][cluster_ids[i:] != c_i]
 
-            if len(j):
+            if len(js):
                 # Find j's with jaccard > threshold ("matches")
-                matched = (F[j] == F[i]).mean(axis=1) >= threshold
+                # This line is equivalent to "(F[js] == F[i]).mean(axis=1) >= threshold", but faster
+                matched = xp.count_nonzero(F[js] == F[i],axis=1) / F.shape[1] >= threshold
 
                 if xp.any(matched):
                     # Get the cluster ids of the matched j's
-                    c_j = cluster_ids[j]
+                    c_j = cluster_ids[js]
                     matched_clusters = xp.unique(c_j[matched])
 
                     # Identify all fingerprints in these clusters
